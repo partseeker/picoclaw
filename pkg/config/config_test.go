@@ -1207,6 +1207,9 @@ func TestModelConfig_ExtraBodyRoundTrip(t *testing.T) {
 				ExtraBody: map[string]any{"custom_field": "value", "num_field": 42},
 			},
 		},
+		security: &SecurityConfig{
+			ModelList: map[string]ModelSecurityEntry{"test-model:0": {APIKeys: []string{"sk-test"}}},
+		},
 	}
 
 	if err := SaveConfig(cfgPath, cfg); err != nil {
@@ -1226,5 +1229,26 @@ func TestModelConfig_ExtraBodyRoundTrip(t *testing.T) {
 	}
 	if got := loaded.ModelList[0].ExtraBody["num_field"]; got != float64(42) {
 		t.Errorf("ExtraBody[num_field] = %v, want 42", got)
+	}
+}
+
+func TestDefaultConfig_MinimaxExtraBody(t *testing.T) {
+	cfg := DefaultConfig()
+
+	var minimaxCfg *ModelConfig
+	for i := range cfg.ModelList {
+		if cfg.ModelList[i].Model == "minimax/MiniMax-M2.5" {
+			minimaxCfg = cfg.ModelList[i]
+			break
+		}
+	}
+	if minimaxCfg == nil {
+		t.Fatal("Minimax model not found in ModelList")
+	}
+	if minimaxCfg.ExtraBody == nil {
+		t.Fatal("Minimax ExtraBody should not be nil")
+	}
+	if got, ok := minimaxCfg.ExtraBody["reasoning_split"]; !ok || got != true {
+		t.Fatalf("Minimax ExtraBody[reasoning_split] = %v, want true", got)
 	}
 }
