@@ -130,6 +130,10 @@
       "encrypt_key": "",
       "verification_token": "",
       "allow_from": [],
+      "placeholder": {
+        "enabled": true,
+        "text": ["Thinking...", "Processing...", "Typing..."]
+      },
       "reasoning_channel_id": "",
       "random_reaction_emoji": [],
       "is_lark": false
@@ -161,7 +165,7 @@
       },
       "placeholder": {
         "enabled": true,
-        "text": "Thinking... 💭"
+        "text": ["Thinking...", "Processing...", "Typing..."]
       },
       "reasoning_channel_id": "",
       "crypto_database_path": "",

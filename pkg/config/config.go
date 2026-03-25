@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"strings"
@@ -382,8 +383,20 @@ type TypingConfig struct {
 
 // PlaceholderConfig controls placeholder message behavior (Phase 10).
 type PlaceholderConfig struct {
-	Enabled bool   `json:"enabled"`
-	Text    string `json:"text,omitempty"`
+	Enabled bool                `json:"enabled"`
+	Text    FlexibleStringSlice `json:"text,omitempty"`
+}
+
+// GetRandomText returns a random placeholder text, or default if none set.
+func (p *PlaceholderConfig) GetRandomText() string {
+	if len(p.Text) == 0 {
+		return "Thinking..."
+	}
+	if len(p.Text) == 1 {
+		return p.Text[0]
+	}
+	idx := rand.Intn(len(p.Text))
+	return p.Text[idx]
 }
 
 type StreamingConfig struct {
