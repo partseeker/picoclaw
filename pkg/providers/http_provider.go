@@ -75,3 +75,8 @@ func (p *HTTPProvider) GetDefaultModel() string {
 func (p *HTTPProvider) SupportsNativeSearch() bool {
 	return p.delegate.SupportsNativeSearch()
 }
+
+// Timeout returns the configured HTTP client timeout for this provider.
+func (p *HTTPProvider) Timeout() time.Duration {
+	return p.delegate.Timeout()
+}

@@ -52,6 +52,7 @@ var protocolMetaByName = map[string]protocolMeta{
 	"coding-plan-anthropic":    {defaultAPIBase: "https://coding-intl.dashscope.aliyuncs.com/apps/anthropic"},
 	"alibaba-coding-anthropic": {defaultAPIBase: "https://coding-intl.dashscope.aliyuncs.com/apps/anthropic"},
 	"vllm":                     {defaultAPIBase: "http://localhost:8000/v1", emptyAPIKeyAllowed: true},
+	"local":                    {defaultAPIBase: "http://clawasaki:8080/v1", emptyAPIKeyAllowed: true},
 	"mistral":                  {defaultAPIBase: "https://api.mistral.ai/v1"},
 	"avian":                    {defaultAPIBase: "https://api.avian.io/v1"},
 	"minimax":                  {defaultAPIBase: "https://api.minimaxi.com/v1"},
@@ -216,6 +217,25 @@ func CreateProviderFromConfig(cfg *config.ModelConfig) (LLMProvider, string, err
 			return nil, "", fmt.Errorf("creating bedrock provider: %w", err)
 		}
 		return provider, modelID, nil
+
+	case "local":
+		// Local llama.cpp inference on clawasaki (http://clawasaki:8080/v1).
+		// Uses the standard OpenAI-compatible path but with a 300s default timeout:
+		// large-prompt GPU generations can take 60+ seconds, well above the shared 120s default.
+		apiBase := ResolveAPIBase(cfg)
+		timeout := cfg.RequestTimeout
+		if timeout == 0 {
+			timeout = 300
+		}
+		return NewHTTPProviderWithMaxTokensFieldAndRequestTimeout(
+			cfg.APIKey(),
+			apiBase,
+			cfg.Proxy,
+			cfg.MaxTokensField,
+			userAgent,
+			timeout,
+			cfg.ExtraBody,
+		), modelID, nil
 
 	case "litellm", "lmstudio", "openrouter", "groq", "zhipu", "gemini", "nvidia", "venice",
 		"ollama", "moonshot", "shengsuanyun", "deepseek", "cerebras",

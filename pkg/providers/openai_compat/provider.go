@@ -81,6 +81,11 @@ func WithRequestTimeout(timeout time.Duration) Option {
 	}
 }
 
+// Timeout returns the configured HTTP client timeout.
+func (p *Provider) Timeout() time.Duration {
+	return p.httpClient.Timeout
+}
+
 func WithExtraBody(extraBody map[string]any) Option {
 	return func(p *Provider) {
 		p.extraBody = extraBody
@@ -406,8 +411,19 @@ func parseStreamResponse(
 		finishReason = "stop"
 	}
 
+	content := textContent.String()
+
+	// Fallback: extract tool calls from streamed content if no structured
+	// tool call deltas were received (same as non-streaming ParseResponse).
+	if len(toolCalls) == 0 && content != "" {
+		if parsed, cleaned := common.ExtractToolCallsFromContent(content); len(parsed) > 0 {
+			toolCalls = parsed
+			content = strings.TrimSpace(cleaned)
+		}
+	}
+
 	return &LLMResponse{
-		Content:      textContent.String(),
+		Content:      content,
 		ToolCalls:    toolCalls,
 		FinishReason: finishReason,
 		Usage:        usage,

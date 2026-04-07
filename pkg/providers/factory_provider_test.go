@@ -984,6 +984,133 @@ func TestCreateProviderFromConfig_Bedrock(t *testing.T) {
 	t.Errorf("unexpected error from bedrock provider: %v", err)
 }
 
+func TestLocalProtocol_DefaultEndpointAndTimeout(t *testing.T) {
+	// local/ should route to http://clawasaki:8080/v1 with no API key required.
+	var gotPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"choices":[{"message":{"content":"ok"},"finish_reason":"stop"}]}`))
+	}))
+	defer srv.Close()
+
+	cfg := &config.ModelConfig{
+		Model:   "local/gemma-4-26b",
+		APIBase: srv.URL, // override to point at test server
+	}
+	provider, modelID, err := CreateProviderFromConfig(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if modelID != "gemma-4-26b" {
+		t.Errorf("modelID = %q, want %q", modelID, "gemma-4-26b")
+	}
+	if provider == nil {
+		t.Fatal("provider is nil")
+	}
+
+	// Verify the provider can make a request (it should hit our test server).
+	resp, err := provider.Chat(t.Context(), nil, nil, "gemma-4-26b", nil)
+	if err != nil {
+		t.Fatalf("Chat error: %v", err)
+	}
+	if resp.Content != "ok" {
+		t.Errorf("Content = %q, want ok", resp.Content)
+	}
+	_ = gotPath
+}
+
+func TestLocalProtocol_DefaultTimeout300s(t *testing.T) {
+	// When RequestTimeout is 0, local/ should use 300s, not the 120s shared default.
+	cfg := &config.ModelConfig{
+		Model:          "local/gemma-4-26b",
+		APIBase:        "http://clawasaki:8080/v1",
+		RequestTimeout: 0,
+	}
+	provider, _, err := CreateProviderFromConfig(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	hp, ok := provider.(*HTTPProvider)
+	if !ok {
+		t.Fatalf("expected *HTTPProvider, got %T", provider)
+	}
+	got := hp.Timeout()
+	want := 300 * time.Second
+	if got != want {
+		t.Errorf("Timeout = %v, want %v", got, want)
+	}
+}
+
+func TestLocalProtocol_ExplicitTimeoutRespected(t *testing.T) {
+	// When RequestTimeout is explicitly set, it should override the 300s default.
+	cfg := &config.ModelConfig{
+		Model:          "local/gemma-4-26b",
+		APIBase:        "http://clawasaki:8080/v1",
+		RequestTimeout: 600,
+	}
+	provider, _, err := CreateProviderFromConfig(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	hp, ok := provider.(*HTTPProvider)
+	if !ok {
+		t.Fatalf("expected *HTTPProvider, got %T", provider)
+	}
+	got := hp.Timeout()
+	want := 600 * time.Second
+	if got != want {
+		t.Errorf("Timeout = %v, want %v", got, want)
+	}
+}
+
+func TestLocalProtocol_DefaultAPIBase(t *testing.T) {
+	got := DefaultAPIBaseForProtocol("local")
+	want := "http://clawasaki:8080/v1"
+	if got != want {
+		t.Errorf("DefaultAPIBaseForProtocol(local) = %q, want %q", got, want)
+	}
+}
+
+func TestLocalProtocol_EmptyAPIKeyAllowed(t *testing.T) {
+	got := IsEmptyAPIKeyAllowedForProtocol("local")
+	if !got {
+		t.Error("IsEmptyAPIKeyAllowedForProtocol(local) = false, want true")
+	}
+}
+
+func TestExistingProvidersUnaffected(t *testing.T) {
+	// Verify a sample of existing protocols still work after adding local/.
+	cases := []struct {
+		model   string
+		apiKey  string
+		apiBase string
+		wantID  string
+	}{
+		{"groq/llama-3.1-70b", "key", "", "llama-3.1-70b"},
+		{"ollama/mistral", "", "http://localhost:11434/v1", "mistral"},
+		{"openrouter/gpt-4o", "key", "", "gpt-4o"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.model, func(t *testing.T) {
+			cfg := &config.ModelConfig{
+				Model:   tc.model,
+				APIBase: tc.apiBase,
+			}
+			if tc.apiKey != "" {
+				cfg.SetAPIKey(tc.apiKey)
+			}
+			_, modelID, err := CreateProviderFromConfig(cfg)
+			if err != nil {
+				t.Fatalf("CreateProviderFromConfig(%q): %v", tc.model, err)
+			}
+			if modelID != tc.wantID {
+				t.Errorf("modelID = %q, want %q", modelID, tc.wantID)
+			}
+		})
+	}
+}
+
 func TestCreateProviderFromConfig_BedrockWithEndpointURL(t *testing.T) {
 	// Set dummy AWS env vars to make test deterministic
 	t.Setenv("AWS_ACCESS_KEY_ID", "test-key")
